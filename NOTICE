@@ -1,0 +1,69 @@
+# Legal Notice
+
+## Ownership and Attribution
+
+This project, "serverless-payment-webhooks", is owned by Rahul Ladumor and is part
+of the InfraTales organization.
+
+Copyright (c) 2024 Rahul Ladumor / InfraTales
+First Published: December 2024
+
+## Trademark Information
+
+InfraTales™ is a trademark owned by Rahul Ladumor.
+
+The InfraTales name, logo, and associated branding are protected intellectual
+property. Use of the trademark requires attribution as specified in the LICENSE
+file.
+
+## Attribution Requirements
+
+If you use, fork, or derive work from this project, you must:
+
+1. Keep this NOTICE file intact
+2. Retain all copyright headers in source files
+3. Maintain attribution to "Originally created by Rahul Ladumor / InfraTales"
+4. Include a link to the original repository when sharing or distributing
+5. Preserve all InfraTales branding and signatures
+
+## Third-Party Components
+
+This project uses the following open-source components:
+
+- AWS CDK (Apache License 2.0)
+- TypeScript (Apache License 2.0)
+- Node.js runtime and libraries (various open-source licenses)
+
+All third-party components remain under their original licenses.
+
+## DMCA and Infringement
+
+If you believe your copyright is being infringed, contact:
+- Email: legal@infratales.com
+- Subject: "DMCA Notice - serverless-payment-webhooks"
+
+We actively monitor for unauthorized use and will enforce our intellectual
+property rights.
+
+## Verification
+
+To verify the authenticity of this project:
+
+1. Official GitHub: https://github.com/InfraTales/serverless-payment-webhooks
+2. Author Profile: https://github.com/RahulLadumor
+3. Website: https://infratales.com
+4. GPG Signature: Releases are signed with the InfraTales GPG key
+
+## Contact
+
+- Website: https://infratales.com
+- Email: contact@infratales.com
+- Security: security@infratales.com
+- Legal: legal@infratales.com
+- Portfolio: https://rahulladumor.com
+- LinkedIn: https://linkedin.com/in/rahul-ladumor
+- Twitter/X: https://x.com/rahul_ladumor
+
+---
+
+Originally created by Rahul Ladumor / InfraTales

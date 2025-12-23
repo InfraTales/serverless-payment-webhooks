@@ -1,0 +1,53 @@
+# CDK
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+cdk.out
+cdk.context.json
+.cdk.staging
+
+# IDEs
+.idea
+.vscode
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts
+dist/
+build/
+
+# AWS
+.aws-sam/
+
+# Lambda
+lib/lambda/*/node_modules/
+lib/lambda/*/*.js
+lib/lambda/*/*.d.ts
+
+# Test outputs
+cfn-outputs/
+test-results/

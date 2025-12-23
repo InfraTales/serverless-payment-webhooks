@@ -1,0 +1,92 @@
+# InfraTales Open Source License v1.0
+
+Copyright (c) 2024 Rahul Ladumor / InfraTales
+
+## Terms and Conditions
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, and distribute copies of the Software,
+subject to the following conditions:
+
+### Attribution Requirements
+
+1. **License Retention**: This license file must be included in all copies or
+   substantial portions of the Software.
+
+2. **Author Attribution**: All copies, modifications, or derivative works must
+   retain the following attribution:
+
+   "Originally created by Rahul Ladumor / InfraTales"
+
+   This attribution must be clearly visible in:
+   - The project README
+   - The source code documentation
+   - Any public-facing application or documentation
+
+3. **Copyright Notices**: The copyright notice and this permission notice must
+   be included in all copies or substantial portions of the Software.
+
+4. **Branding**: While you may modify and distribute the Software, you must not:
+   - Remove InfraTales branding from the original source
+   - Remove author attribution from files
+   - Remove links to the original repository
+   - Claim the original work as your own creation
+
+### Derivative Works
+
+If you create derivative works:
+- You must clearly state that your work is derived from InfraTales
+- You must maintain attribution to the original author
+- You may add your own attribution for your modifications
+- You may not imply endorsement by InfraTales without permission
+
+### Commercial Use
+
+Commercial use is permitted under these conditions:
+- All attribution requirements are met
+- The Software is not sold as if it were original work
+- Modifications for commercial purposes follow attribution requirements
+
+### Prohibited Actions
+
+You may NOT:
+- Claim original authorship of this Software
+- Remove copyright notices or author attribution
+- Use the InfraTales trademark in a way that suggests endorsement
+- Sublicense or sell the Software as your original creation
+
+### Enforcement
+
+Violation of these terms will result in:
+- Automatic termination of this license
+- Potential DMCA takedown requests
+- Trademark infringement claims where applicable
+- Public disclosure of violation
+
+### Trademark Notice
+
+"InfraTales" is a trademark of Rahul Ladumor. Use of the InfraTales trademark
+in derivative works requires prior written permission.
+
+## Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Contact
+
+For questions about this license:
+- Email: legal@infratales.com
+- Security concerns: security@infratales.com
+- Website: https://infratales.com
+
+---
+
+Originally created by Rahul Ladumor / InfraTales
