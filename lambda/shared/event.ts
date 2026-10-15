@@ -17,28 +17,46 @@ export interface PaymentEvent {
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 
+/**
+ * How far along the payment lifecycle a status is. Providers send `created` in
+ * whole seconds, so two events for one payment often share a timestamp. When they
+ * do, the later step wins. Statuses not listed rank 0 and only win on a newer time.
+ */
+const STATUS_RANK: Record<string, number> = {
+  pending: 1, processing: 1, requires_action: 1,
+  succeeded: 2, failed: 2, canceled: 2,
+  refunded: 3, disputed: 3,
+};
+
+export function statusRank(status: string): number {
+  return STATUS_RANK[status] ?? 0;
+}
+
+type Json = Record<string, unknown>;
+
+const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isId = (v: unknown): v is string => typeof v === 'string' && ID.test(v);
+const isShortString = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
+const isWhole = (v: unknown, min: number): v is number => Number.isSafeInteger(v) && (v as number) >= min;
+
+/** Returns the event with only the fields we use, or undefined if any is missing or malformed. */
 export function parsePaymentEvent(raw: string): PaymentEvent | undefined {
-  let body: any;
+  let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
     return undefined;
   }
-  const d = body?.data;
+  if (!isObject(body) || !isObject(body.data)) return undefined;
+  const { id, type, created } = body;
+  const { paymentId, amount, currency, status } = body.data;
+
   const valid =
-    typeof body?.id === 'string' && ID.test(body.id) &&
-    typeof body.type === 'string' && body.type.length <= 64 &&
-    Number.isInteger(body.created) && body.created > 0 &&
-    typeof d?.paymentId === 'string' && ID.test(d.paymentId) &&
-    Number.isInteger(d.amount) && d.amount >= 0 &&
-    typeof d.currency === 'string' && /^[a-z]{3}$/.test(d.currency) &&
-    typeof d.status === 'string' && d.status.length <= 32;
+    isId(id) && isShortString(type, 64) && isWhole(created, 1) &&
+    isId(paymentId) && isWhole(amount, 0) &&
+    typeof currency === 'string' && /^[a-z]{3}$/.test(currency) &&
+    isShortString(status, 32);
   if (!valid) return undefined;
 
-  return {
-    id: body.id,
-    type: body.type,
-    created: body.created,
-    data: { paymentId: d.paymentId, amount: d.amount, currency: d.currency, status: d.status },
-  };
+  return { id, type, created, data: { paymentId, amount, currency, status } };
 }

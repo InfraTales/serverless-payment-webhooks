@@ -45,12 +45,16 @@ function check(ok: boolean, message: string) {
 async function main() {
   const out = await outputs();
   const secretRes = await new SecretsManagerClient({}).send(new GetSecretValueCommand({ SecretId: out.SigningSecretArn }));
-  const secret = JSON.parse(secretRes.SecretString!).current as string;
+  const secret = (JSON.parse(secretRes.SecretString!) as { current: string }).current;
   const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
   const run = Date.now().toString(36);
 
-  const event = (id: string, created: number, status: string) =>
-    JSON.stringify({ id, type: `payment.${status}`, created, data: { paymentId: `pay_smoke_${run}`, amount: 1250, currency: 'usd', status } });
+  const event = (id: string, created: number, status: string, paymentId = `pay_smoke_${run}`) =>
+    JSON.stringify({ id, type: `payment.${status}`, created, data: { paymentId, amount: 1250, currency: 'usd', status } });
+  const completed = (eventId: string) => async () => {
+    const r = await doc.send(new GetCommand({ TableName: out.EventsTableName, Key: { eventId } }));
+    return r.Item?.status === 'COMPLETED' ? true : undefined;
+  };
 
   // 1. forged
   const forged = event(`evt_forged_${run}`, now(), 'succeeded');
@@ -71,17 +75,25 @@ async function main() {
   // 3. out of order: an older "processing" event arrives late
   const late = event(`evt_late_${run}`, now() - 600, 'processing');
   check((await post(out.WebhookUrl, late, signatureHeader(secret, now(), late))) === 200, 'late older event gets 200');
-  await waitFor('the late event to complete', async () => {
-    const r = await doc.send(new GetCommand({ TableName: out.EventsTableName, Key: { eventId: `evt_late_${run}` } }));
-    return r.Item?.status === 'COMPLETED' ? true : undefined;
-  });
+  await waitFor('the late event to complete', completed(`evt_late_${run}`));
   const payment = await doc.send(new GetCommand({ TableName: out.PaymentsTableName, Key: { paymentId: `pay_smoke_${run}` } }));
   check(payment.Item?.status === 'succeeded' && payment.Item?.lastEventId === id, 'late older event did not overwrite the newer state');
+
+  // 4. same second, in order: "processing", then "succeeded" with the same timestamp. The later step must win.
+  const tiePayment = `pay_tie_${run}`;
+  const t = now();
+  for (const [eventId, status] of [[`evt_tie_a_${run}`, 'processing'], [`evt_tie_b_${run}`, 'succeeded']]) {
+    const b = event(eventId, t, status, tiePayment);
+    check((await post(out.WebhookUrl, b, signatureHeader(secret, now(), b))) === 200, `same-second ${status} gets 200`);
+    await waitFor(`${eventId} to complete`, completed(eventId));
+  }
+  const tie = await doc.send(new GetCommand({ TableName: out.PaymentsTableName, Key: { paymentId: tiePayment } }));
+  check(tie.Item?.status === 'succeeded', 'same-second "succeeded" replaced "processing"');
 
   console.log('\nsmoke test passed');
 }
 
 main().catch((err) => {
-  console.error(err.message ?? err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

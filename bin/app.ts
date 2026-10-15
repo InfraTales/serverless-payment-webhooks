@@ -5,8 +5,14 @@ import { PaymentWebhooksStack } from '../lib/payment-webhooks-stack';
 
 const app = new cdk.App();
 
+// Optional: cdk deploy -c alertEmail=you@example.com
+const alertEmail: unknown = app.node.tryGetContext('alertEmail');
+if (alertEmail !== undefined && (typeof alertEmail !== 'string' || !alertEmail.includes('@'))) {
+  throw new Error(`alertEmail must be an email address, got ${JSON.stringify(alertEmail)}`);
+}
+
 new PaymentWebhooksStack(app, 'PaymentWebhooks', {
-  alertEmail: app.node.tryGetContext('alertEmail'),
+  alertEmail,
   env: { region: process.env.CDK_DEFAULT_REGION ?? 'us-east-1' },
 });
 

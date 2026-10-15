@@ -194,6 +194,21 @@ export class PaymentWebhooksStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }).addAlarmAction(alarmAction);
 
+    new cloudwatch.Alarm(this, 'ReceiverServerErrors', {
+      alarmDescription: 'The endpoint answered 5xx, so the provider is retrying. Check the receiver logs: the queue, the signing secret, or a failed init.',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '5xx',
+        dimensionsMap: { ApiId: api.apiId, Stage: '$default' },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(alarmAction);
+
     new cloudwatch.Alarm(this, 'SignatureRejections', {
       alarmDescription: 'Many 4xx answers: a bad secret after rotation, or someone probing the endpoint.',
       metric: new cloudwatch.Metric({

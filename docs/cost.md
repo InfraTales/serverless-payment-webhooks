@@ -1,6 +1,6 @@
 # Cost
 
-Monthly cost in us-east-1, before the AWS Free Tier. Prices were checked against the AWS Price List API on 2026-10-15.
+These are monthly costs in us-east-1, before the AWS Free Tier. We checked every price against the AWS Price List API on 2026-10-15, and the Lambda durations below are assumptions, not measurements.
 
 ## Assumptions
 
@@ -19,9 +19,9 @@ Monthly cost in us-east-1, before the AWS Free Tier. Prices were checked against
 | DynamoDB on-demand writes | $0.625 per million write units | $0.02 | $1.88 |
 | EventBridge custom events | $1.00 per million | $0.01 | $1.00 |
 | Secrets Manager | $0.40 per secret + $0.05 per 10,000 calls | $0.49 | $0.49 |
-| CloudWatch alarms (3) | $0.10 each | $0.30 | $0.30 |
+| CloudWatch alarms (4) | $0.10 each | $0.40 | $0.40 |
 | CloudWatch Logs | $0.50 per GB | $0.01 | $0.51 |
-| **Total** | | **about $0.86** | **about $7.80** |
+| **Total** | | **about $0.96** | **about $7.90** |
 
 DynamoDB storage, point-in-time recovery and SNS round to zero at these volumes. Event IDs expire after 30 days, so the `ProcessedEvents` table stays small.
 
@@ -33,7 +33,7 @@ Version 1 ran the functions in a VPC with one NAT Gateway. A NAT Gateway costs $
 
 ## Things that change the bill
 
-- **Failed conditional writes are billed.** Every duplicate costs one write unit for the claim that fails. That's cheap, but a provider replaying a big backlog shows up here.
+- **You pay for failed conditional writes.** Every duplicate costs one write unit for the claim that fails. That's cheap, but a provider replaying a big backlog shows up here.
 - **A REST API instead of an HTTP API** costs $3.50 per million requests instead of $1.00. You'd switch only to attach AWS WAF.
 - **A customer managed KMS key** adds $1 a month plus request charges.
 

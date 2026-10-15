@@ -2,7 +2,7 @@ import { mockClient } from 'aws-sdk-client-mock';
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { dynamoApplier, eventBridgePublisher, makeProcessor } from '../../lambda/processor';
+import { APPLY_CONDITION, dynamoApplier, eventBridgePublisher, makeProcessor } from '../../lambda/processor';
 import type { PaymentEvent } from '../../lambda/shared/event';
 import { FakePayments, FakeStore, paymentEvent, sqsRecord } from '../fakes';
 
@@ -86,7 +86,8 @@ describe('dynamoApplier', () => {
     expect(await apply(paymentEvent())).toBe('applied');
     const input = ddb.commandCalls(UpdateCommand)[0].args[0].input;
     expect(input.Key).toEqual({ paymentId: 'pay_1' });
-    expect(input.ConditionExpression).toBe('attribute_not_exists(paymentId) OR lastEventCreated < :created OR lastEventId = :id');
+    expect(input.ConditionExpression).toBe(APPLY_CONDITION);
+    expect(input.ExpressionAttributeValues).toMatchObject({ ':id': 'evt_1', ':created': 1_760_000_000, ':rank': 2 });
   });
 
   test("maps a failed condition to 'stale'", async () => {

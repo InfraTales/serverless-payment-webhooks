@@ -10,7 +10,8 @@ import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { DynamoIdempotencyStore, IdempotencyStore } from './shared/idempotency';
-import { parsePaymentEvent, PaymentEvent } from './shared/event';
+import { parsePaymentEvent, PaymentEvent, statusRank } from './shared/event';
+import { requireEnv } from './shared/env';
 
 export type ApplyResult = 'applied' | 'stale';
 
@@ -68,9 +69,15 @@ export function makeProcessor(deps: ProcessorDeps) {
 
 /**
  * Providers don't promise order. The condition keeps a late "payment.processing"
- * from overwriting an earlier-delivered "payment.succeeded". The same event ID
- * may re-apply, so a retry after a failed publish still goes through.
+ * from overwriting an earlier-delivered "payment.succeeded":
+ *   - a newer `created` wins,
+ *   - on the same second, the later lifecycle step wins (see statusRank),
+ *   - the same event ID may re-apply, so a retry after a failed publish still goes through.
  */
+export const APPLY_CONDITION =
+  'attribute_not_exists(paymentId) OR lastEventId = :id OR lastEventCreated < :created' +
+  ' OR (lastEventCreated = :created AND statusRank < :rank)';
+
 export function dynamoApplier(doc: DynamoDBDocumentClient, tableName: string) {
   return async (evt: PaymentEvent): Promise<ApplyResult> => {
     try {
@@ -78,11 +85,13 @@ export function dynamoApplier(doc: DynamoDBDocumentClient, tableName: string) {
         new UpdateCommand({
           TableName: tableName,
           Key: { paymentId: evt.data.paymentId },
-          UpdateExpression: 'SET #s = :status, amount = :amount, currency = :currency, lastEventId = :id, lastEventCreated = :created',
-          ConditionExpression: 'attribute_not_exists(paymentId) OR lastEventCreated < :created OR lastEventId = :id',
+          UpdateExpression:
+            'SET #s = :status, statusRank = :rank, amount = :amount, currency = :currency, lastEventId = :id, lastEventCreated = :created',
+          ConditionExpression: APPLY_CONDITION,
           ExpressionAttributeNames: { '#s': 'status' },
           ExpressionAttributeValues: {
             ':status': evt.data.status,
+            ':rank': statusRank(evt.data.status),
             ':amount': evt.data.amount,
             ':currency': evt.data.currency,
             ':id': evt.id,
@@ -114,7 +123,7 @@ const ddb = new DynamoDBClient({});
 
 export const handler = makeProcessor({
   store: DynamoIdempotencyStore.fromEnv(ddb),
-  applyEvent: dynamoApplier(DynamoDBDocumentClient.from(ddb), process.env.PAYMENTS_TABLE!),
-  publish: eventBridgePublisher(new EventBridgeClient({}), process.env.EVENT_BUS_NAME!),
+  applyEvent: dynamoApplier(DynamoDBDocumentClient.from(ddb), requireEnv('PAYMENTS_TABLE')),
+  publish: eventBridgePublisher(new EventBridgeClient({}), requireEnv('EVENT_BUS_NAME')),
   nowSeconds: () => Math.floor(Date.now() / 1000),
 });

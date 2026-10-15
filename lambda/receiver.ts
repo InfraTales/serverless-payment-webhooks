@@ -12,6 +12,7 @@ import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-sec
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { verifySignature } from './shared/signature';
 import { parsePaymentEvent } from './shared/event';
+import { requireEnv } from './shared/env';
 
 export const MAX_BODY_BYTES = 64 * 1024;
 
@@ -30,18 +31,20 @@ const reply = (statusCode: number, body: object): APIGatewayProxyResultV2 => ({
 export function makeReceiver(deps: ReceiverDeps) {
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
     // HMAC is computed over the exact bytes the provider sent, so never re-serialize the JSON.
-    const raw = event.isBase64Encoded ? Buffer.from(event.body ?? '', 'base64').toString('utf8') : event.body ?? '';
-    if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) return reply(413, { error: 'payload too large' });
+    const bytes = event.isBase64Encoded ? Buffer.from(event.body ?? '', 'base64') : Buffer.from(event.body ?? '', 'utf8');
+    if (bytes.length > MAX_BODY_BYTES) return reply(413, { error: 'payload too large' });
 
     // HTTP APIs pass header names in lower case.
-    const result = verifySignature(event.headers?.['x-webhook-signature'], raw, await deps.getSecrets(), deps.nowSeconds());
+    const result = verifySignature(event.headers?.['x-webhook-signature'], bytes, await deps.getSecrets(), deps.nowSeconds());
     if (!result.ok) {
       console.warn(JSON.stringify({ msg: 'signature rejected', reason: result.reason, requestId: event.requestContext?.requestId }));
       return reply(401, { error: 'invalid signature' });
     }
 
-    const parsed = parsePaymentEvent(raw);
-    if (!parsed) return reply(400, { error: 'invalid event' });
+    // JSON is UTF-8 (RFC 8259). Decoding strictly means the text we queue is exactly what was signed.
+    const raw = decodeUtf8(bytes);
+    const parsed = raw === undefined ? undefined : parsePaymentEvent(raw);
+    if (raw === undefined || !parsed) return reply(400, { error: 'invalid event' });
 
     // If this throws, the provider gets a 500 and retries later. That is what we want.
     await deps.enqueue(parsed.id, raw);
@@ -50,33 +53,49 @@ export function makeReceiver(deps: ReceiverDeps) {
   };
 }
 
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+function decodeUtf8(bytes: Buffer): string | undefined {
+  try {
+    return utf8.decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------- wiring for the real Lambda ----------
 
 const SECRET_CACHE_MS = 5 * 60 * 1000;
-let cached: { secrets: string[]; at: number } | undefined;
 
+/**
+ * Loads {"current", "previous"} and keeps it for 5 minutes per container.
+ * A secret with no "current" value is a deploy mistake, not a bad request, so it
+ * throws: the provider gets a 500 and retries, and the 5xx alarm fires.
+ */
 export function cachedSecretLoader(client: SecretsManagerClient, secretId: string, now = () => Date.now()) {
+  let cached: { secrets: string[]; at: number } | undefined;
   return async (): Promise<string[]> => {
     if (cached && now() - cached.at < SECRET_CACHE_MS) return cached.secrets;
     const res = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
-    const value = JSON.parse(res.SecretString ?? '{}');
-    cached = { secrets: [value.current, value.previous].filter((s): s is string => typeof s === 'string' && s.length > 0), at: now() };
-    return cached.secrets;
+    const value = JSON.parse(res.SecretString ?? '{}') as { current?: unknown; previous?: unknown };
+    if (typeof value.current !== 'string' || value.current.length === 0) {
+      throw new Error('Signing secret has no "current" value');
+    }
+    const secrets = [value.current, value.previous].filter((s): s is string => typeof s === 'string' && s.length > 0);
+    cached = { secrets, at: now() };
+    return secrets;
   };
 }
 
-export function resetSecretCache(): void {
-  cached = undefined;
-}
-
 const sqs = new SQSClient({});
+const queueUrl = requireEnv('QUEUE_URL');
 
 export const handler = makeReceiver({
-  getSecrets: cachedSecretLoader(new SecretsManagerClient({}), process.env.SIGNING_SECRET_ARN!),
+  getSecrets: cachedSecretLoader(new SecretsManagerClient({}), requireEnv('SIGNING_SECRET_ARN')),
   enqueue: async (eventId, rawBody) => {
     await sqs.send(
       new SendMessageCommand({
-        QueueUrl: process.env.QUEUE_URL!,
+        QueueUrl: queueUrl,
         MessageBody: rawBody,
         MessageAttributes: { eventId: { DataType: 'String', StringValue: eventId } },
       }),

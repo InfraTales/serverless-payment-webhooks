@@ -24,9 +24,11 @@ The comparison uses `crypto.timingSafeEqual`, so response timing doesn't reveal 
 
 The HMAC covers the exact bytes the provider sent. If you parse the JSON and serialize it again, spacing and key order change, and a valid request fails. The receiver checks the raw body and then queues that same raw body. There's a test for this.
 
+API Gateway sometimes hands over the body base64-encoded. The receiver then checks the signature over the decoded bytes, not over a string it built from them. Next it decodes those bytes as strict UTF-8. A body that isn't valid UTF-8 gets a 400, even with a good signature. That way the text on the queue always matches the signed bytes.
+
 ## The signing secret
 
-The secret is stored in AWS Secrets Manager as JSON:
+AWS Secrets Manager holds the secret as JSON:
 
 ```json
 { "current": "whsec_from_provider", "previous": "" }
@@ -35,6 +37,8 @@ The secret is stored in AWS Secrets Manager as JSON:
 To rotate it, set `previous` to the old value and `current` to the new one. Switch the provider over, wait a day, then clear `previous`. The receiver caches the secret for 5 minutes, so a change takes up to 5 minutes to apply.
 
 After the first deploy, `current` holds a random value. Replace it with the provider's secret, or every request gets a 401.
+
+If `current` is empty or missing, the receiver answers 500 instead of 401. That's a deploy mistake, not a bad request, so it should look like one: the provider retries, and the `ReceiverServerErrors` alarm fires. The receiver doesn't cache a failed read, so it recovers as soon as you fix the secret.
 
 ## Least privilege
 
@@ -47,9 +51,9 @@ A bug in the receiver can't change payment state. The worst it can do is queue a
 
 ## Abuse limits
 
-- Bodies over 64 KB are rejected before any crypto runs.
-- The API stage is throttled to 50 requests per second with a burst of 100. Raise it if your provider sends more.
-- The 4xx alarm fires on more than 20 rejections in 5 minutes. That usually means a bad secret after rotation, or someone probing the URL.
+- The receiver turns away bodies over 64 KB before any crypto runs.
+- The API stage allows 50 requests per second with a burst of 100. Raise it if your provider sends more.
+- The 4xx alarm fires on more than 20 rejections in 5 minutes. Most often that's a bad secret after rotation, or someone probing the URL.
 
 ## What we chose not to add
 
