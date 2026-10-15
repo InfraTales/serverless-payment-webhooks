@@ -11,10 +11,12 @@
     "build": "tsc --noEmit",
     "test": "jest",
     "synth": "cdk synth --quiet",
-    "check": "npm run build && npm test && npm run synth",
+    "check": "npm run build && npm run lint && npm test && npm run synth",
     "deploy": "cdk deploy",
     "destroy": "cdk destroy",
-    "smoke": "ts-node scripts/smoke-test.ts"
+    "smoke": "ts-node scripts/smoke-test.ts",
+    "test:int": "jest -c jest.integration.config.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1151.0",
@@ -28,15 +30,18 @@
   },
   "devDependencies": {
     "@aws-sdk/client-cloudformation": "^3.1152.0",
+    "@eslint/js": "^10.0.1",
     "@types/aws-lambda": "^8.10.164",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.5",
     "aws-cdk": "^2.1145.0",
     "aws-sdk-client-mock": "^4.1.0",
     "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2"
   }
 }

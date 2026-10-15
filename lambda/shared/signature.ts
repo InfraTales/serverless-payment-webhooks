@@ -14,12 +14,13 @@ export type VerifyResult =
   | { ok: true }
   | { ok: false; reason: 'missing' | 'malformed' | 'stale' | 'mismatch' };
 
-export function computeSignature(secret: string, timestamp: number, rawBody: string): string {
-  return createHmac('sha256', secret).update(`${timestamp}.${rawBody}`, 'utf8').digest('hex');
+export function computeSignature(secret: string, timestamp: number, rawBody: string | Buffer): string {
+  // Sign the bytes as sent. A string is treated as its UTF-8 bytes.
+  return createHmac('sha256', secret).update(`${timestamp}.`, 'utf8').update(typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody).digest('hex');
 }
 
 /** Builds a header value. Used by tests and the smoke test to act as the provider. */
-export function signatureHeader(secret: string, timestamp: number, rawBody: string): string {
+export function signatureHeader(secret: string, timestamp: number, rawBody: string | Buffer): string {
   return `t=${timestamp},v1=${computeSignature(secret, timestamp, rawBody)}`;
 }
 
@@ -29,7 +30,7 @@ export function signatureHeader(secret: string, timestamp: number, rawBody: stri
  */
 export function verifySignature(
   header: string | undefined,
-  rawBody: string,
+  rawBody: string | Buffer,
   secrets: string[],
   nowSeconds: number,
   toleranceSeconds = TOLERANCE_SECONDS,

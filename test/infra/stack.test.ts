@@ -79,11 +79,6 @@ test('failed payments go to the alert topic', () => {
   });
 });
 
-test('DLQ, queue age and 4xx alarms all notify the alert topic', () => {
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 3);
-  template.allResourcesProperties('AWS::CloudWatch::Alarm', { AlarmActions: [Match.anyValue()] });
-});
-
 test('cdk-nag AWS Solutions finds no unacknowledged findings', () => {
   const nagApp = new cdk.App({ outdir: fs.mkdtempSync(path.join(os.tmpdir(), 'cdk-nag-')) });
   new PaymentWebhooksStack(nagApp, 'Nag', { env: { region: 'us-east-1' } });
@@ -95,4 +90,26 @@ test('cdk-nag AWS Solutions finds no unacknowledged findings', () => {
     // Every acknowledgement must carry a written reason.
     for (const ack of plugin.suppressedViolations) expect(ack.reason.length).toBeGreaterThan(40);
   }
+});
+
+test('timeouts are ordered: processor timeout < lock < visibility timeout', () => {
+  // If the lock were shorter than the function timeout, a slow worker could lose it mid-event
+  // and a retry would process the same event twice. If visibility were shorter than the lock,
+  // retries would arrive while the lock is still live and burn receive attempts towards the DLQ.
+  const processor = Object.values<any>(template.findResources('AWS::Lambda::Function'))
+    .find((f) => f.Properties.Environment.Variables.LOCK_SECONDS)!.Properties;
+  const queue = Object.values<any>(template.findResources('AWS::SQS::Queue')).find((q) => q.Properties.RedrivePolicy)!.Properties;
+  const lock = Number(processor.Environment.Variables.LOCK_SECONDS);
+
+  expect(processor.Timeout).toBeLessThan(lock);
+  expect(lock).toBeLessThan(queue.VisibilityTimeout);
+  expect(queue.VisibilityTimeout).toBeGreaterThanOrEqual(6 * processor.Timeout);
+});
+
+test('alarms cover the DLQ, queue age, 4xx and 5xx, all wired to the alert topic', () => {
+  const alarms = Object.values<any>(template.findResources('AWS::CloudWatch::Alarm'));
+  expect(alarms.map((a) => a.Properties.MetricName).sort()).toEqual(
+    ['4xx', '5xx', 'ApproximateAgeOfOldestMessage', 'ApproximateNumberOfMessagesVisible'],
+  );
+  for (const a of alarms) expect(a.Properties.AlarmActions).toHaveLength(1);
 });

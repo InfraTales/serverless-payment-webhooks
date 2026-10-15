@@ -1,16 +1,16 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { mockClient } from 'aws-sdk-client-mock';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { cachedSecretLoader, makeReceiver, MAX_BODY_BYTES, resetSecretCache } from '../../lambda/receiver';
+import { cachedSecretLoader, makeReceiver, MAX_BODY_BYTES } from '../../lambda/receiver';
 import { signatureHeader } from '../../lambda/shared/signature';
 import { FakeQueue, paymentEvent } from '../fakes';
 
 const secret = 'whsec_test';
 const now = 1_760_000_000;
 
-function request(body: string, header?: string, base64 = false): APIGatewayProxyEventV2 {
+function request(body: string | Buffer, header?: string, base64 = false): APIGatewayProxyEventV2 {
   return {
-    body: base64 ? Buffer.from(body).toString('base64') : body,
+    body: base64 ? Buffer.from(body).toString('base64') : body.toString(),
     isBase64Encoded: base64,
     headers: header ? { 'x-webhook-signature': header } : {},
     requestContext: { requestId: 'req-1' },
@@ -60,6 +60,21 @@ describe('receiver', () => {
     expect(res.body).toBe(JSON.stringify({ error: 'invalid signature' }));
   });
 
+  test('verifies the signature over the decoded bytes, not a re-encoded string', async () => {
+    const { queue, call } = setup();
+    const body = Buffer.from(JSON.stringify(paymentEvent({ data: { status: 'succeeded' } })).replace('usd', 'eur'), 'utf8');
+    expect((await call(request(body, signatureHeader(secret, now, body), true))).statusCode).toBe(200);
+    expect(queue.messages[0].body).toBe(body.toString('utf8'));
+  });
+
+  test('rejects a correctly signed body that is not valid UTF-8 with 400', async () => {
+    const { queue, call } = setup();
+    const json = Buffer.from(JSON.stringify(paymentEvent()), 'utf8');
+    const body = Buffer.concat([json.subarray(0, -1), Buffer.from([0xff]), json.subarray(-1)]);
+    expect((await call(request(body, signatureHeader(secret, now, body), true))).statusCode).toBe(400);
+    expect(queue.messages).toHaveLength(0);
+  });
+
   test('rejects a signed body that is missing fields with 400', async () => {
     const { queue, call } = setup();
     const body = JSON.stringify({ id: 'evt_1', type: 'payment.succeeded' });
@@ -88,7 +103,7 @@ describe('receiver', () => {
 
 describe('cachedSecretLoader', () => {
   const sm = mockClient(SecretsManagerClient);
-  beforeEach(() => { sm.reset(); resetSecretCache(); });
+  beforeEach(() => sm.reset());
 
   test('reads current and previous, and caches for 5 minutes', async () => {
     sm.on(GetSecretValueCommand).resolves({ SecretString: JSON.stringify({ current: 'a', previous: 'b' }) });
@@ -101,6 +116,27 @@ describe('cachedSecretLoader', () => {
     t = 6 * 60 * 1000;
     await load();
     expect(sm.commandCalls(GetSecretValueCommand)).toHaveLength(2);
+  });
+
+  test('each loader has its own cache', async () => {
+    sm.on(GetSecretValueCommand).resolves({ SecretString: JSON.stringify({ current: 'a' }) });
+    await cachedSecretLoader(new SecretsManagerClient({}), 'one')();
+    await cachedSecretLoader(new SecretsManagerClient({}), 'two')();
+    expect(sm.commandCalls(GetSecretValueCommand).map((c) => c.args[0].input.SecretId)).toEqual(['one', 'two']);
+  });
+
+  test('throws when "current" is missing, so a bad deploy is a 500 and an alarm, not a 401', async () => {
+    sm.on(GetSecretValueCommand).resolves({ SecretString: JSON.stringify({ current: '', previous: 'b' }) });
+    await expect(cachedSecretLoader(new SecretsManagerClient({}), 'arn')()).rejects.toThrow('no "current" value');
+  });
+
+  test('does not cache a failure: the next request reads the secret again', async () => {
+    sm.on(GetSecretValueCommand)
+      .rejectsOnce(new Error('throttled'))
+      .resolves({ SecretString: JSON.stringify({ current: 'a' }) });
+    const load = cachedSecretLoader(new SecretsManagerClient({}), 'arn');
+    await expect(load()).rejects.toThrow('throttled');
+    expect(await load()).toEqual(['a']);
   });
 
   test('drops an empty previous secret', async () => {

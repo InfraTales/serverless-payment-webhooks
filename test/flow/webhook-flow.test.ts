@@ -97,6 +97,26 @@ test('events arriving out of order leave the newest state in place', async () =>
   expect(s.published.map((e) => e.id)).toEqual(['evt_b']);
 });
 
+// Providers send `created` in whole seconds, so "processing" and "succeeded" often share one.
+test.each([
+  ['in order', ['evt_a', 'evt_b'], ['evt_a', 'evt_b']],
+  ['backwards', ['evt_b', 'evt_a'], ['evt_b']],
+])('two events in the same second, delivered %s, end on the later step', async (_order, deliveryOrder, expectedPublished) => {
+  const s = system();
+  const events: Record<string, PaymentEvent> = {
+    evt_a: paymentEvent({ id: 'evt_a', type: 'payment.processing', created: 100, data: { status: 'processing' } }),
+    evt_b: paymentEvent({ id: 'evt_b', type: 'payment.succeeded', created: 100, data: { status: 'succeeded' } }),
+  };
+
+  for (const id of deliveryOrder) {
+    await s.deliver(events[id]);
+    await s.drain();
+  }
+
+  expect(s.payments.rows.get('pay_1')?.status).toBe('succeeded');
+  expect(s.published.map((e) => e.id)).toEqual(expectedPublished);
+});
+
 test('a failed publish is retried without writing the payment twice in a different state', async () => {
   const s = system();
   s.failNextPublishes(1);

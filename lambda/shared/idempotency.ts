@@ -9,6 +9,7 @@
  */
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { requireEnv } from './env';
 
 export type ClaimResult = 'claimed' | 'done' | 'busy';
 
@@ -34,9 +35,9 @@ export class DynamoIdempotencyStore implements IdempotencyStore {
 
   static fromEnv(client = new DynamoDBClient({})): DynamoIdempotencyStore {
     return new DynamoIdempotencyStore(DynamoDBDocumentClient.from(client), {
-      tableName: process.env.EVENTS_TABLE!,
-      lockSeconds: Number(process.env.LOCK_SECONDS ?? 120),
-      retentionSeconds: Number(process.env.RETENTION_DAYS ?? 30) * 86400,
+      tableName: requireEnv('EVENTS_TABLE'),
+      lockSeconds: positiveInt('LOCK_SECONDS', 120),
+      retentionSeconds: positiveInt('RETENTION_DAYS', 30) * 86400,
     });
   }
 
@@ -99,4 +100,12 @@ export class DynamoIdempotencyStore implements IdempotencyStore {
       if (!(err instanceof ConditionalCheckFailedException)) throw err;
     }
   }
+}
+
+function positiveInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`${name} must be a positive whole number, got "${raw}"`);
+  return n;
 }

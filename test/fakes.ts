@@ -6,7 +6,7 @@
 import type { SQSEvent, SQSRecord } from 'aws-lambda';
 import type { ClaimResult, IdempotencyStore } from '../lambda/shared/idempotency';
 import type { ApplyResult } from '../lambda/processor';
-import type { PaymentEvent } from '../lambda/shared/event';
+import { statusRank, type PaymentEvent } from '../lambda/shared/event';
 
 export class FakeStore implements IdempotencyStore {
   rows = new Map<string, { status: 'IN_PROGRESS' | 'COMPLETED'; lockExpiresAt?: number }>();
@@ -34,7 +34,12 @@ export class FakePayments {
 
   apply = async (evt: PaymentEvent): Promise<ApplyResult> => {
     const row = this.rows.get(evt.data.paymentId);
-    if (row && !(row.lastEventCreated < evt.created || row.lastEventId === evt.id)) return 'stale';
+    const newer =
+      row === undefined ||
+      row.lastEventId === evt.id ||
+      row.lastEventCreated < evt.created ||
+      (row.lastEventCreated === evt.created && statusRank(row.status) < statusRank(evt.data.status));
+    if (!newer) return 'stale';
     this.writes++;
     this.rows.set(evt.data.paymentId, {
       status: evt.data.status,
@@ -80,7 +85,7 @@ export function paymentEvent(overrides: EventOverrides = {}): PaymentEvent {
     id: 'evt_1',
     type: 'payment.succeeded',
     created: 1_760_000_000,
-    ...(({ data, ...rest }) => rest)(overrides),
+    ...(({ data: _data, ...rest }) => rest)(overrides),
     data: { paymentId: 'pay_1', amount: 4999, currency: 'usd', status: 'succeeded', ...overrides.data },
   };
 }
