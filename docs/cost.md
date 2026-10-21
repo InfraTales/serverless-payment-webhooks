@@ -18,10 +18,10 @@ These are monthly costs in us-east-1, before the AWS Free Tier. We checked every
 | SQS standard | $0.40 per million requests | $0.01 | $1.20 |
 | DynamoDB on-demand writes | $0.625 per million write units | $0.02 | $1.88 |
 | EventBridge custom events | $1.00 per million | $0.01 | $1.00 |
-| Secrets Manager | $0.40 per secret + $0.05 per 10,000 calls | $0.49 | $0.49 |
+| Secrets Manager | $0.40 per secret + $0.05 per 10,000 calls | $0.45 | $0.49 |
 | CloudWatch alarms (4) | $0.10 each | $0.40 | $0.40 |
 | CloudWatch Logs | $0.50 per GB | $0.01 | $0.51 |
-| **Total** | | **about $0.96** | **about $7.90** |
+| **Total** | | **about $0.92** | **about $7.90** |
 
 DynamoDB storage, point-in-time recovery and SNS round to zero at these volumes. Event IDs expire after 30 days, so the `ProcessedEvents` table stays small.
 
